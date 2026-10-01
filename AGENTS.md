@@ -1,0 +1,55 @@
+# Building kmux, xclaude and xcodex: procedure for agents
+
+You were pointed here to install some or all of these tools in your current environment.
+The specs in `docs/` are the contract. The files in `reference/` are working
+implementations: copy them and adapt where needed, but don't redesign them.
+
+## Rules
+
+1. **Back up before you modify.** Before touching `~/.bashrc`, `~/.zshrc`, `~/.profile`,
+   `~/.tmux.conf`, `~/bin` or `~/.config/x*`, copy what exists into
+   `~/.config-backups/<tool>-<UTC timestamp>/`. Add a `MANIFEST.txt` that lists what you backed up
+   and what was absent.
+2. **Never read, print, copy or log credentials.** That covers `.credentials.json`, `auth.json`,
+   tokens and keychain entries. Check whether someone is logged in from file existence or from the
+   tool's own status command. Never read the contents. Seeding a new profile must never copy credentials.
+3. **Make it idempotent.** A second install must change nothing: guard rc-file lines with `grep -q`
+   and don't create duplicate symlinks.
+4. **Logging in is the user's job.** A profile that isn't logged in yet gets reported to the user. Don't work around it.
+5. **Trust the code over prose.** Where a reference README and its script disagree, the
+   `docs/*.md` spec says which one wins.
+
+## Procedure
+
+1. **Check prerequisites:** `bash`, `git`, `tmux` (≥ 3.2), `python3`, plus `claude` and/or `codex`
+   on a non-interactive `PATH`. Report any that are missing. Install them only if the user asked you to.
+2. **kmux:** follow [docs/kmux.md](docs/kmux.md) § Install. Install
+   `reference/kmux/variant-a/kmux` at `~/bin/kmux` (mode 755) and symlink
+   `~/.local/bin/kmux` to it. Use `reference/kmux/variant-a/tmux.conf` as the source of truth
+   for `~/.tmux.conf`; it is newer than the copy embedded in `kmux-rebuild-prompt.md`.
+3. **xclaude:** follow [docs/xclaude.md](docs/xclaude.md) § Install. The files go in
+   `~/.config/xclaude/` and are sourced from `~/.zshrc` and `~/.bashrc`:
+   `[ -f "$HOME/.config/xclaude/xclaude.sh" ] && . "$HOME/.config/xclaude/xclaude.sh"`.
+   Wire `statusline.py` into each profile's settings as that doc describes.
+4. **xcodex:** follow [docs/xcodex.md](docs/xcodex.md) § Install. The files go in
+   `~/.config/xcodex/`, a hardcoded path, and are sourced the same way.
+5. **Verify:** run every item in each doc's "Verification checklist" and report pass or fail for each.
+   Use the fake-binary tests where the real CLIs need a login.
+6. **Report:** what you installed and where, the backup directory, which profiles are logged in
+   (from `xclaude ls` / `xcodex ls`), and what the user still has to do (e.g. `xclaude 2` then
+   `/login`, or `xcodex 2 login`).
+
+## In devcontainers
+
+Claude/Codex config usually sits on a named volume (`~/.claude`, sometimes `~/.codex`).
+Extra profile directories (`~/.claude-2`, `~/.codex-2`, …) and the files in `~/bin` and `~/.config` **are not on a volume, so
+a rebuild loses them**. Tell the user. Suggest either adding volumes for them or
+re-running this procedure from `postCreateCommand`.
+
+## For automation (scripts, gates, runners)
+
+`xclaude` and `xcodex` are **shell functions**, so programs can't spawn them. Spawn
+`claude` / `codex` directly, with `CLAUDE_CONFIG_DIR` / `CODEX_HOME` set in the child's
+environment. Fall back to another profile only when a run produced **no result** (usage limit, auth
+failure, crash or timeout). Never re-run a completed judgment on another account to get a different answer.
+See [docs/xcodex.md](docs/xcodex.md) § Integrating with automation.

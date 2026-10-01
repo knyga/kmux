@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if (( $# != 0 )); then
+  printf 'Usage: kmux\n' >&2
+  exit 64
+fi
+
+repo=$(git rev-parse --show-toplevel 2>/dev/null || pwd -P)
+repo=$(cd -- "$repo" && pwd -P)
+repo_name=$(basename -- "$repo")
+safe_name=$(printf '%s' "$repo_name" | LC_ALL=C tr -cs '[:alnum:]_-' '_')
+safe_name=${safe_name#_}
+safe_name=${safe_name%_}
+if [[ -z "$safe_name" ]]; then
+  safe_name=directory
+fi
+
+path_hash=$(printf '%s' "$repo" | git hash-object --stdin | cut -c1-10)
+session="kmux_${safe_name}_${path_hash}"
+
+if [[ -n ${TMUX:-} ]]; then
+  if ! tmux has-session -t "=$session" 2>/dev/null; then
+    tmux new-session -d -s "$session" -c "$repo" 'exec claude'
+  fi
+  exec tmux switch-client -t "=$session"
+fi
+
+exec tmux new-session -A -s "$session" -c "$repo" 'exec claude'
