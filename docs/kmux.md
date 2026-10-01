@@ -40,17 +40,33 @@ These are numbered so tests can refer to them. Every item can be checked (see §
      (no trailing newline is hashed).
    - Because the name depends on the full canonical path, two repos with the same basename
      under different parents get different sessions. The same path always gives the same session.
-4. **Outside tmux** (`$TMUX` empty or unset): `exec tmux new-session -A -s "$session" -c "$repo" [cmd]`.
-   `-A` attaches if the session exists and creates it otherwise.
+4. **Outside tmux** (`$TMUX` empty or unset): if `tmux has-session -t "=$session"` fails,
+   create the session detached (`new-session -d … -c "$repo" [cmd]`). Apply the status bar
+   (rule 10), then `exec tmux attach-session -t "=$session"`. (This replaces the earlier
+   single `new-session -A`: the session has to exist before kmux can style it, and the
+   `exec` leaves no chance to run anything afterwards.)
 5. **Inside tmux** (`$TMUX` set): never nest. If `tmux has-session -t "=$session"` fails,
-   create the session detached (`new-session -d … -c "$repo" [cmd]`). Then
-   `exec tmux switch-client -t "=$session"`.
+   create the session detached (`new-session -d … -c "$repo" [cmd]`). Apply the status bar
+   (rule 10), then `exec tmux switch-client -t "=$session"`.
 6. **Exact matching.** Every `-t` target uses the `=` prefix, so tmux never picks another
-   session whose name merely starts with this one.
+   session whose name merely starts with this one. `set-option` and `list-windows` take a
+   pane/window target, where a bare `=name` fails with `no such session`, so those use `=name:`.
 7. **Hygiene.** The script runs with `set -euo pipefail`, and the final tmux call is `exec`'d
    so no wrapper bash process is left behind.
 8. **Working directory.** The new session's starting directory is the canonical repo root (`-c "$repo"`).
 9. **Idempotent.** Running kmux again for the same repo never creates a second session.
+10. **Baked-in status bar.** On every run, before attaching or switching, kmux sets the
+    status bar from §4 on **its own session only** (`set-option -t "=$session:"`, never `-g`).
+    Session options: `status on`, `status-position top`, `status-interval 15`,
+    `status-style`, `status-left ' #S '`, `visual-activity off`. Window options
+    (`window-status-*`, `monitor-activity`) have no session scope in tmux, so kmux sets
+    them on every existing window of the session and installs a session
+    `after-new-window` hook (replaced, not appended, on each run) that sets them on new
+    windows. The result looks the same with or without `~/.tmux.conf`, and it comes back
+    after a resurrect restore, which drops session options. **`status-right` is
+    never set by kmux:** Continuum runs its autosave from the *global* `status-right`, so
+    a session-level override would hide it and stop autosave without any error.
+    `~/.tmux.conf` still sets `status-right` (with `#{continuum_status}`) globally.
 
 ## 2. Canonical script
 
@@ -79,19 +95,62 @@ fi
 path_hash=$(printf '%s' "$repo" | git hash-object --stdin | cut -c1-10)
 session="kmux_${safe_name}_${path_hash}"
 
+# Status bar, baked in so a kmux session looks right without ~/.tmux.conf and
+# after a resurrect restore (which drops session options). Scoped to this
+# session, re-applied on every run. status-right is deliberately left alone:
+# tmux-continuum hooks its autosave into the global status-right, and a
+# session-level override would silently stop autosave.
+window_opts=(
+  window-status-separator ''
+  window-status-style 'fg=colour245,bg=colour234'
+  window-status-format ' #{?window_activity_flag,!, }#I:#W '
+  window-status-current-style 'fg=colour232,bg=colour81,bold'
+  window-status-current-format ' #I:#W#{?window_zoomed_flag, [Z],} '
+  window-status-activity-style 'fg=colour226,bg=colour234,bold'
+  monitor-activity on
+)
+
+style_session() {
+  local t="=$1:" hook='' i w
+  local -a cmd=(
+    set-option -t "$t" status on \;
+    set-option -t "$t" status-position top \;
+    set-option -t "$t" status-interval 15 \;
+    set-option -t "$t" status-style 'fg=colour250,bg=colour234' \;
+    set-option -t "$t" status-left '#[fg=colour81,bold] #S #[default]' \;
+    set-option -t "$t" visual-activity off \;
+  )
+  # Window options have no session scope: set them on each existing window,
+  # and on windows created later through a session hook.
+  for (( i = 0; i < ${#window_opts[@]}; i += 2 )); do
+    hook+="set-option -w ${window_opts[i]} '${window_opts[i+1]}' ; "
+  done
+  while read -r w; do
+    for (( i = 0; i < ${#window_opts[@]}; i += 2 )); do
+      cmd+=(set-option -w -t "$w" "${window_opts[i]}" "${window_opts[i+1]}" \;)
+    done
+  done < <(tmux list-windows -t "$t" -F '#{window_id}')
+  tmux "${cmd[@]}" set-hook -t "$t" after-new-window "${hook% ; }"
+}
+
 if [[ -n ${TMUX:-} ]]; then
   if ! tmux has-session -t "=$session" 2>/dev/null; then
     tmux new-session -d -s "$session" -c "$repo" 'exec claude'
   fi
+  style_session "$session"
   exec tmux switch-client -t "=$session"
 fi
 
-exec tmux new-session -A -s "$session" -c "$repo" 'exec claude'
+if ! tmux has-session -t "=$session" 2>/dev/null; then
+  tmux new-session -d -s "$session" -c "$repo" 'exec claude'
+fi
+style_session "$session"
+exec tmux attach-session -t "=$session"
 ```
 
 ## 3. Variants and how to choose
 
-The two harvested scripts differ **only** in the session command. Both `new-session`
+The two scripts differ **only** in the session command (both carry the baked-in status bar). Both `new-session`
 lines have it:
 
 | Variant | Session command | What it gives you | Pick it when |
@@ -135,7 +194,7 @@ Settings that matter, and why:
 | `terminal-features ',xterm*:clipboard'` + `set -s set-clipboard on` | OSC 52 clipboard passthrough, so copying in tmux reaches the outer terminal/host |
 | `mouse on`, `history-limit 100000` | Scroll through long agent output with the mouse wheel. The large scrollback is needed for that output |
 | `mode-keys vi`, `aggressive-resize on` | vi copy mode. Window size follows the client that is actually looking at it rather than the smallest attached client |
-| `status-position top`, `status-left ' #S '` | Shows the session name, `kmux_<repo>_<hash>`, so you can see which repo you are in |
+| `status-position top`, `status-left ' #S '` | Also baked into the kmux script (rule 10), so kmux sessions get this bar even without this file. Shows the session name, `kmux_<repo>_<hash>`, so you can see which repo you are in |
 | `monitor-activity on`, `visual-activity off`, `window-status-format '#{?window_activity_flag,!, }…'` | A background window that has new output gets a `!` marker, with no bell or popup |
 | `status-right '#{continuum_status} …'` | Shows the Continuum autosave state. Without it, autosave still runs but you can't see it |
 | `M-1…M-0`, `M-Left/Right` | Switch windows without the prefix key. `\|`/`-` split in the pane's cwd, `hjkl`/`HJKL` move between and resize panes, `z` zooms, `Enter` enters copy mode, `r` reloads the config |
@@ -201,7 +260,8 @@ name() { r=$(git rev-parse --show-toplevel 2>/dev/null || pwd -P); r=$(cd -- "$r
 | 10 | No leftover wrapper (rule 7) | `pgrep -af 'bash .*kmux'` shows nothing while you are attached |
 | 11 | Single client (variant A hook) | Attach from a second terminal. The first terminal is detached, and `tmux list-clients` shows 1 |
 | 12 | Persistence | After about 5 minutes (or `prefix C-s`), `~/.local/share/tmux/resurrect/last` exists. Then `tmux kill-server`, start tmux again, and `tmux ls` shows the sessions restored |
-| 13 | Rollback works | Every path in `MANIFEST.txt` either exists in the backup dir or is listed as absent |
+| 13 | Baked-in status bar (rule 10) | With `tmux -f /dev/null` (no config): run `kmux`, then `tmux show -t "=$(name):" status-position` → `top` and `tmux show -w -t "=$(name):" monitor-activity` → `on`. `tmux new-window -t "=$(name):"`: the new window also has `monitor-activity on`. `tmux show -g status-position` stays `bottom`, and `tmux show -t "=$(name):" status-right` prints nothing (inherits the global value) |
+| 14 | Rollback works | Every path in `MANIFEST.txt` either exists in the backup dir or is listed as absent |
 
 ## 7. Pitfalls and lessons
 
@@ -226,3 +286,9 @@ name() { r=$(git rev-parse --show-toplevel 2>/dev/null || pwd -P); r=$(cd -- "$r
   after login, they are not on PATH until you re-login.
 - **`run-shell` for tpm must be the last line** of `.tmux.conf`, or Continuum autosave can break without any visible error.
 - **Prefer the variant A config over the conf embedded in the rebuild prompt.** That copy predates the hook.
+- **Never set `status-right` per session.** Continuum's autosave lives in the global
+  `status-right`. A session-level value hides it and autosave stops, with no error. That is why
+  the status bar baked into kmux leaves `status-right` out.
+- **The bar is re-applied on every kmux run.** If you change the bar with `prefix :` or by
+  editing `~/.tmux.conf`, the next `kmux` puts the baked-in values back on that session.
+  To change the bar for kmux sessions, edit the script.

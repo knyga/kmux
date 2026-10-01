@@ -19,11 +19,54 @@ fi
 path_hash=$(printf '%s' "$repo" | git hash-object --stdin | cut -c1-10)
 session="kmux_${safe_name}_${path_hash}"
 
+# Status bar, baked in so a kmux session looks right without ~/.tmux.conf and
+# after a resurrect restore (which drops session options). Scoped to this
+# session, re-applied on every run. status-right is deliberately left alone:
+# tmux-continuum hooks its autosave into the global status-right, and a
+# session-level override would silently stop autosave.
+window_opts=(
+  window-status-separator ''
+  window-status-style 'fg=colour245,bg=colour234'
+  window-status-format ' #{?window_activity_flag,!, }#I:#W '
+  window-status-current-style 'fg=colour232,bg=colour81,bold'
+  window-status-current-format ' #I:#W#{?window_zoomed_flag, [Z],} '
+  window-status-activity-style 'fg=colour226,bg=colour234,bold'
+  monitor-activity on
+)
+
+style_session() {
+  local t="=$1:" hook='' i w
+  local -a cmd=(
+    set-option -t "$t" status on \;
+    set-option -t "$t" status-position top \;
+    set-option -t "$t" status-interval 15 \;
+    set-option -t "$t" status-style 'fg=colour250,bg=colour234' \;
+    set-option -t "$t" status-left '#[fg=colour81,bold] #S #[default]' \;
+    set-option -t "$t" visual-activity off \;
+  )
+  # Window options have no session scope: set them on each existing window,
+  # and on windows created later through a session hook.
+  for (( i = 0; i < ${#window_opts[@]}; i += 2 )); do
+    hook+="set-option -w ${window_opts[i]} '${window_opts[i+1]}' ; "
+  done
+  while read -r w; do
+    for (( i = 0; i < ${#window_opts[@]}; i += 2 )); do
+      cmd+=(set-option -w -t "$w" "${window_opts[i]}" "${window_opts[i+1]}" \;)
+    done
+  done < <(tmux list-windows -t "$t" -F '#{window_id}')
+  tmux "${cmd[@]}" set-hook -t "$t" after-new-window "${hook% ; }"
+}
+
 if [[ -n ${TMUX:-} ]]; then
   if ! tmux has-session -t "=$session" 2>/dev/null; then
     tmux new-session -d -s "$session" -c "$repo" 'exec claude'
   fi
+  style_session "$session"
   exec tmux switch-client -t "=$session"
 fi
 
-exec tmux new-session -A -s "$session" -c "$repo" 'exec claude'
+if ! tmux has-session -t "=$session" 2>/dev/null; then
+  tmux new-session -d -s "$session" -c "$repo" 'exec claude'
+fi
+style_session "$session"
+exec tmux attach-session -t "=$session"
