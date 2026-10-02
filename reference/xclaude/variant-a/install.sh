@@ -31,9 +31,11 @@ for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
 done
 
 # 3. install the status line into every config dir's settings.json
+#    (XCLAUDE_STATUSLINE=0 skips this step: xclaude without the status bar)
 while IFS= read -r d; do
   [ -n "$d" ] || continue
   mkdir -p "$d"
+  [ "${XCLAUDE_STATUSLINE:-1}" = 0 ] && continue
   STATUSLINE="$statusline" SETTINGS="$d/settings.json" python3 - <<'PY'
 import json, os
 settings, statusline = os.environ["SETTINGS"], os.environ["STATUSLINE"]

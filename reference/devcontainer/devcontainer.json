@@ -1,0 +1,59 @@
+// Template. Replace __PROJECT__ with the repository's directory name (docs/devcontainer.md § 2).
+{
+  "name": "__PROJECT__",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "."
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "remoteUser": "vscode",
+  "workspaceFolder": "/workspaces/__PROJECT__",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/__PROJECT__,type=bind,consistency=cached",
+
+  // --- Network ---------------------------------------------------------------
+  // No firewall / network policy: the container has unrestricted internet access
+  // (Anthropic + OpenAI APIs, package registries, GitHub, the project's own cloud services).
+  // Deliberately no init-firewall.sh, no NET_ADMIN/NET_RAW capabilities, no egress allowlist.
+  // Behind a corporate proxy, set HTTP(S)_PROXY in "remoteEnv".
+  "runArgs": ["--init"],
+
+  "mounts": [
+    // Logins + settings survive container rebuilds: one named volume per profile directory.
+    // Profile 1 is the CLI default; 2 is the first spare account for xclaude/xcodex.
+    // Add -3/-4 the same way if you use them (docs/devcontainer.md § 3).
+    "source=__PROJECT__-claude-${devcontainerId},target=/home/vscode/.claude,type=volume",
+    "source=__PROJECT__-claude-2-${devcontainerId},target=/home/vscode/.claude-2,type=volume",
+    "source=__PROJECT__-codex-${devcontainerId},target=/home/vscode/.codex,type=volume",
+    "source=__PROJECT__-codex-2-${devcontainerId},target=/home/vscode/.codex-2,type=volume",
+    "source=__PROJECT__-gh-${devcontainerId},target=/home/vscode/.config/gh,type=volume",
+    // tmux-resurrect snapshots, so kmux sessions come back after a container restart.
+    "source=__PROJECT__-tmux-${devcontainerId},target=/home/vscode/.local/share/tmux,type=volume"
+    // Host credential directories (~/.config/gcloud, ~/.aws, ~/.ssh, ...) are deliberately NOT
+    // mounted: they give every agent in here the owner's full personal access. Use a credential
+    // scoped to this project, kept in the git-ignored .secrets/ (docs/devcontainer.md § 4).
+  ],
+
+  "containerEnv": {
+    "CLAUDE_CONFIG_DIR": "/home/vscode/.claude",
+    // Which home tools post-create installs from the kit (the AGENTS.md menu answer).
+    // Any of: kmux xclaude claude-statusline xcodex codex-statusline. Empty = none.
+    "KIT_COMPONENTS": "kmux xclaude claude-statusline xcodex codex-statusline",
+    "PYTHONUNBUFFERED": "1"
+  },
+
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "anthropic.claude-code",
+        "eamodio.gitlens"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "zsh"
+      }
+    }
+  }
+}

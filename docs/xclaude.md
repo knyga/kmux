@@ -133,7 +133,9 @@ The installer is idempotent, so re-running it after an upgrade or a fresh clone 
    ```
    It keeps every other key and writes `.tmp` followed by `os.replace` (atomic). A missing
    file starts from `{}`. A non-object or invalid JSON file makes the install **fail**
-   rather than get clobbered.
+   rather than get clobbered. With `XCLAUDE_STATUSLINE=0` the dirs are still created but
+   `settings.json` is not touched: xclaude without the status bar (the AGENTS.md menu lets the
+   user pick the two separately).
 
 The status-line path is resolved to an absolute path at install time, so it is correct for
 whatever `$HOME` the machine has. Because step 4 runs `mkdir -p`, every profile dir exists
