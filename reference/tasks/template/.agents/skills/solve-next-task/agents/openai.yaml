@@ -1,0 +1,4 @@
+interface:
+  display_name: "Solve Next Task"
+  short_description: "Complete one queued task through verified closure"
+  default_prompt: "Use $solve-next-task to claim and complete the next eligible project task."

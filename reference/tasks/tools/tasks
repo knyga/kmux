@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# `tasks` — launcher for the vendored task-queue CLI (package ./taskctl, stdlib only, Python >= 3.11).
+# Contract: tasks/README.md. Run it from anywhere inside the repo or one of its worktrees.
+set -euo pipefail
+here="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd)"
+py="${TASKS_PYTHON:-python3}"
+"$py" -c 'import sys; sys.exit(sys.version_info < (3, 11))' 2>/dev/null || {
+  echo "tasks: needs Python >= 3.11 (set TASKS_PYTHON to one)" >&2; exit 1; }
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$here${PYTHONPATH:+:$PYTHONPATH}" exec "$py" -m taskctl.cli "$@"

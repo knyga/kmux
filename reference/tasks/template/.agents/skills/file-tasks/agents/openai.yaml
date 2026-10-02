@@ -1,0 +1,4 @@
+interface:
+  display_name: "File Tasks"
+  short_description: "Turn a request into deduplicated, ranked task files"
+  default_prompt: "Use $file-tasks to file this as tasks without implementing it."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Solve Task Queue"
+  short_description: "Work through queued tasks with persistent limits"
+  default_prompt: "Use $solve-next-task-loop to work through up to three queued tasks sequentially."

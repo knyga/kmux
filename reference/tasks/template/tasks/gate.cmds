@@ -1,0 +1,12 @@
+# Merged-tree gate for `tools/tasks close`: one command per line, run in a throwaway worktree that
+# holds main + the task branch. Any non-zero exit refuses the close and moves nothing.
+# Read from the MAIN checkout only, so a task branch cannot relax the gate that judges it.
+# A relative tool path the fresh worktree lacks (.venv/bin/..., node_modules/.bin/...) runs from main.
+# Put the project's real lint + test commands here. Empty = no gate, and close prints a warning.
+#
+# Examples:
+#   .venv/bin/ruff check src tests
+#   .venv/bin/python -m pytest -q
+#   npm run -s typecheck
+#   npm test --silent
+#   bash -n bin/mytool
