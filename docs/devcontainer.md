@@ -2,7 +2,7 @@
 
 How to give a project repository a `.devcontainer/` that an agent can live in: **unrestricted
 internet access**, Claude Code and Codex preinstalled, logins that survive rebuilds, and the kit's
-home tools (kmux, xclaude, xcodex, status bars) reinstalled on every rebuild. Enter it from the
+home tools (kmux, xclaude, xcodex, status bars, vim, nvim) reinstalled on every rebuild. Enter it from the
 host with [`dch`](dch.md), then run `kmux` inside.
 
 | File | Goes to (in the target repo) | Role |
@@ -59,8 +59,8 @@ Target = a project repository the user named. Never this kit repo.
    repository's directory name, `chmod 755 post-create.sh`. Check none is left:
    `grep -rn __PROJECT__ .devcontainer` → nothing.
 4. **Set `KIT_COMPONENTS`** in `devcontainer.json` to the home tools the user chose in the
-   AGENTS.md menu (any of `kmux xclaude claude-statusline xcodex codex-statusline`; empty string
-   for none). If they did not choose xclaude/xcodex, drop the `-2` volumes and their `chown` lines.
+   AGENTS.md menu (any of `kmux xclaude claude-statusline xcodex codex-statusline vim nvim`; empty
+   string for none). If they did not choose xclaude/xcodex, drop the `-2` volumes and their `chown` lines.
 5. **Project specifics**: dependency install in post-create's marked block, forwarded ports
    (`forwardPorts` + `portsAttributes`), stack extensions, service sidecars (switch to
    `dockerComposeFile` with an `app` service and keep the same volumes and env), and env vars for
@@ -91,7 +91,7 @@ Run inside the container (`dch <repo>`) after step 7.
 | 3 | CLIs | `claude --version`, `codex --version`, `gh --version`, `tmux -V` (≥ 3.2), `python3 --version` all succeed |
 | 4 | Codex outside the volume | `readlink -f "$(command -v codex)"` is not under `~/.codex` |
 | 5 | Volumes owned by the user | `stat -c %U ~/.claude ~/.codex ~/.config/gh` → the remote user for each |
-| 6 | Kit components | for each chosen component: `command -v kmux`; `type xclaude`; `type xcodex`; `jq .statusLine ~/.claude/settings.json` non-null (claude-statusline) |
+| 6 | Kit components | for each chosen component: `command -v kmux`; `type xclaude`; `type xcodex`; `jq .statusLine ~/.claude/settings.json` non-null (claude-statusline); `vim --version`; `nvim --version` |
 | 7 | No host credentials | `ls ~/.config/gcloud ~/.aws ~/.ssh 2>&1` → absent, unless the user explicitly asked for one |
 | 8 | Logins survive a rebuild | log in once, then `devcontainer up --workspace-folder . --remove-existing-container` from the host: `xclaude ls` still shows the login |
 | 9 | Rebuild is idempotent | after the rebuild, `grep -c xclaude/xclaude.sh ~/.zshrc` → `1` |
@@ -108,5 +108,8 @@ Run inside the container (`dch <repo>`) after step 7.
 - **`KIT_REPO` defaults to the public kit on GitHub.** Pin a fork or set `KIT_DIR` to a
   checkout already in the container (e.g. a mounted path) if the network policy or review process
   requires it.
+- **A failed kit component does not fail the build.** post-create prints a `WARNING: kit-bootstrap
+  failed` line and the container still comes up, so read the post-create log (check 6), not just
+  the exit status.
 - **`devcontainer exec` does not run post-create**; only `up` on a new container does. After editing
   post-create, rebuild with `--remove-existing-container`.

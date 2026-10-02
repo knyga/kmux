@@ -38,8 +38,8 @@
   "containerEnv": {
     "CLAUDE_CONFIG_DIR": "/home/vscode/.claude",
     // Which home tools post-create installs from the kit (the AGENTS.md menu answer).
-    // Any of: kmux xclaude claude-statusline xcodex codex-statusline. Empty = none.
-    "KIT_COMPONENTS": "kmux xclaude claude-statusline xcodex codex-statusline",
+    // Any of: kmux xclaude claude-statusline xcodex codex-statusline vim nvim. Empty = none.
+    "KIT_COMPONENTS": "kmux xclaude claude-statusline xcodex codex-statusline vim nvim",
     "PYTHONUNBUFFERED": "1"
   },
 

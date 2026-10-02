@@ -9,12 +9,13 @@ ones you want (a menu, see `AGENTS.md` step 0) and installs only those:
 | `kmux` | One command. It opens or switches to **one persistent tmux session per repository**, with Claude Code running in it. | [docs/kmux.md](docs/kmux.md) |
 | `xclaude` | **Multiple Claude Code accounts (profiles).** `xclaude <n>` runs `claude` with `CLAUDE_CONFIG_DIR` set to profile *n*'s directory. It ships with a status line that shows the account, model, context and rate limits. | [docs/xclaude.md](docs/xclaude.md) |
 | `xcodex` | The same idea for OpenAI Codex. `xcodex <n>` runs `codex` with `CODEX_HOME` set to profile *n*'s directory. | [docs/xcodex.md](docs/xcodex.md) |
+| `vim` / `nvim` | Terminal editors, the editor only (no config). vim from the distro package, nvim from the official release into `~/.local`. | [docs/editors.md](docs/editors.md) |
 | `dch` | Host-side. `dch [folder]` brings up the folder's devcontainer (builds it the first time) and opens zsh in it. | [docs/dch.md](docs/dch.md) |
 | devcontainer | **Per project.** A `.devcontainer/` template with full internet access, Claude Code + Codex, logins on named volumes, no host credentials, and the picked home tools reinstalled on every rebuild. | [docs/devcontainer.md](docs/devcontainer.md) |
 | `tasks` | **The AI SDLC loop, installed per project.** A file-based task queue (`tasks/<status>/NNNN-<slug>.md`, folder = status), the `tools/tasks` CLI that claims (lease + branch + worktree), gates and lands work, and the `solve-next-task` / `solve-next-task-loop` / `file-tasks` skills for Claude Code and Codex. | [docs/tasks.md](docs/tasks.md) |
 
-The tools are independent of each other. kmux, xclaude and xcodex (and their status bars) live in
-`$HOME`, `dch` on the docker host, and the devcontainer and `tasks` are committed into each project
+The tools are independent of each other. kmux, xclaude and xcodex (and their status bars), vim and nvim
+live in `$HOME`, `dch` on the docker host, and the devcontainer and `tasks` are committed into each project
 repository. `dch` gets you into the container; `kmux` keeps the session; `xclaude`/`xcodex` pick
 the account. When one account hits its usage limit, the next profile is a different account.
 

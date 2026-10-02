@@ -2,9 +2,10 @@
 # Non-interactive install of the kit's home tools, for postCreateCommand (a rebuilt container has
 # a fresh $HOME layer). The interactive equivalent is AGENTS.md; this script is its unattended form.
 #
-#   KIT_COMPONENTS="kmux xclaude claude-statusline xcodex codex-statusline" kit-bootstrap.sh <kit-dir>
+#   KIT_COMPONENTS="kmux xclaude claude-statusline xcodex codex-statusline vim nvim" kit-bootstrap.sh <kit-dir>
 #
 # Components (space separated, any subset): kmux xclaude claude-statusline xcodex codex-statusline
+# vim nvim. Editors are installed bare: an existing ~/.vimrc, ~/.vim or ~/.config/nvim is never touched.
 # Idempotent. Backs up every file it changes into ~/.config-backups/kit-bootstrap-<UTC>/ with a
 # MANIFEST.txt. Never reads, copies or logs a credential file.
 set -euo pipefail
@@ -15,7 +16,7 @@ want() { [[ "$components" == *" $1 "* ]]; }
 log() { printf 'kit-bootstrap: %s\n' "$*"; }
 
 for c in ${KIT_COMPONENTS-}; do
-  case "$c" in kmux|xclaude|claude-statusline|xcodex|codex-statusline) ;;
+  case "$c" in kmux|xclaude|claude-statusline|xcodex|codex-statusline|vim|nvim) ;;
     *) log "unknown component '$c' (dch, tasks and devcontainer are not home-tool components)" >&2; exit 64 ;;
   esac
 done
@@ -141,5 +142,56 @@ else:
 PY
 fi
 
+failed=""
+
+if want vim; then
+  if command -v vim >/dev/null; then
+    log "vim already installed ($(vim --version | head -1))"
+  else
+    if [ "$(id -u)" = 0 ]; then as_root=(); else as_root=(sudo -n); fi
+    if command -v apt-get >/dev/null; then
+      "${as_root[@]}" apt-get update -qq && "${as_root[@]}" env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends vim
+    elif command -v dnf >/dev/null; then "${as_root[@]}" dnf install -y -q vim-enhanced
+    elif command -v apk >/dev/null; then "${as_root[@]}" apk add -q vim
+    elif command -v brew >/dev/null; then brew install -q vim
+    else false
+    fi && log "vim installed ($(vim --version | head -1))" \
+       || { log "warning: could not install vim (no package manager, or sudo needs a password)" >&2; failed="$failed vim"; }
+  fi
+fi
+
+if want nvim; then
+  # Official release tarball: distro packages lag far behind (Debian bookworm ships 0.7).
+  # NVIM_VERSION pins a tag (e.g. v0.11.4); default "stable". An existing install is kept unless
+  # NVIM_VERSION names a different version.
+  nvim_root="$HOME/.local/opt/nvim"
+  have=$("$nvim_root/bin/nvim" --version 2>/dev/null | head -1 | awk '{print $2}' || true)
+  if [ -n "$have" ] && { [ -z "${NVIM_VERSION-}" ] || [ "${NVIM_VERSION}" = "$have" ]; }; then
+    log "nvim already installed ($have)"
+  else
+    case "$(uname -s)-$(uname -m)" in
+      Linux-x86_64)               asset=nvim-linux-x86_64 ;;
+      Linux-aarch64|Linux-arm64)  asset=nvim-linux-arm64 ;;
+      Darwin-arm64)               asset=nvim-macos-arm64 ;;
+      Darwin-x86_64)              asset=nvim-macos-x86_64 ;;
+      *) asset="" ;;
+    esac
+    tmp=$(mktemp -d)
+    if [ -n "$asset" ] \
+       && curl -fsSL "https://github.com/neovim/neovim/releases/download/${NVIM_VERSION:-stable}/$asset.tar.gz" \
+            | tar -xz -C "$tmp" \
+       && "$tmp/$asset/bin/nvim" --version >/dev/null; then
+      mkdir -p "$HOME/.local/opt" "$HOME/.local/bin"
+      rm -rf "$nvim_root"; mv "$tmp/$asset" "$nvim_root"
+      ln -sfn "$nvim_root/bin/nvim" "$HOME/.local/bin/nvim"
+      log "nvim installed ($("$nvim_root/bin/nvim" --version | head -1)) at $nvim_root"
+    else
+      log "warning: could not install nvim for $(uname -s)-$(uname -m)" >&2; failed="$failed nvim"
+    fi
+    rm -rf "$tmp"
+  fi
+fi
+
 rm -f "$manifest.paths"
 log "done; backups and MANIFEST.txt in $backup"
+[ -z "$failed" ] || { log "FAILED:$failed" >&2; exit 1; }

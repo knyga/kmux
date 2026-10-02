@@ -1,7 +1,7 @@
-# Building kmux, xclaude, xcodex, dch, devcontainers and tasks: procedure for agents
+# Building kmux, xclaude, xcodex, editors, dch, devcontainers and tasks: procedure for agents
 
 You were pointed here to install some or all of these tools in your current environment. The
-home tools (kmux, xclaude, xcodex, their status bars) go in `$HOME`; `dch` goes on the **host**
+home tools (kmux, xclaude, xcodex, their status bars, vim, nvim) go in `$HOME`; `dch` goes on the **host**
 that runs docker. The per-project pieces, a **devcontainer** and **tasks** (a file-based task queue
 plus the skills that drain it, i.e. the AI SDLC loop), go into a **project repository** and are
 committed there.
@@ -28,7 +28,7 @@ implementations: copy them and adapt where needed, but don't redesign them.
 
 0. **Ask what to install. Always, before anything else.** Show this menu and let the user pick
    any subset (a multi-select prompt if your harness has one, e.g. Claude Code's AskUserQuestion,
-   which takes at most 4 options per question, so split it into the two groups below; otherwise
+   which takes at most 4 options per question, so split it into the groups below; otherwise
    print the numbered list and wait for the answer). Don't preselect, don't assume "all", and
    install nothing that wasn't picked.
 
@@ -39,18 +39,22 @@ implementations: copy them and adapt where needed, but don't redesign them.
    | 3 | Claude status bar | `$HOME` | `statusline.py`: account, model, context, rate limits. With xclaude it goes into every profile, without it into the default profile only |
    | 4 | `xcodex` | `$HOME` | Several Codex accounts, `xcodex <n>` ([docs/xcodex.md](docs/xcodex.md)) |
    | 5 | Codex status bar | `$HOME` | Codex's native footer (model, branch, context, limits). With xcodex it is injected per run, without it written to the default `~/.codex/config.toml` |
-   | 6 | `dch` | host `$HOME` | `dch [folder]`: bring up a folder's devcontainer and open zsh in it ([docs/dch.md](docs/dch.md)) |
-   | 7 | devcontainer | project repo | A `.devcontainer/` with full internet access, Claude + Codex, login volumes, and the picked home tools reinstalled on rebuild ([docs/devcontainer.md](docs/devcontainer.md)) |
-   | 8 | tasks | project repo | The AI SDLC loop: task queue, CLI, skills, guard hook ([docs/tasks.md](docs/tasks.md)) |
+   | 6 | `vim` | system package | Vim from the distro package manager ([docs/editors.md](docs/editors.md)) |
+   | 7 | `nvim` | `$HOME` | Current stable Neovim from the official release, in `~/.local` ([docs/editors.md](docs/editors.md)) |
+   | 8 | `dch` | host `$HOME` | `dch [folder]`: bring up a folder's devcontainer and open zsh in it ([docs/dch.md](docs/dch.md)) |
+   | 9 | devcontainer | project repo | A `.devcontainer/` with full internet access, Claude + Codex, login volumes, and the picked home tools reinstalled on rebuild ([docs/devcontainer.md](docs/devcontainer.md)) |
+   | 10 | tasks | project repo | The AI SDLC loop: task queue, CLI, skills, guard hook ([docs/tasks.md](docs/tasks.md)) |
 
-   Group the question as **home tools** (1–5, plus 6 when you are on the docker host) and
-   **per project** (7–8). If 7 or 8 is picked, also ask **which repositories**, listing the
-   checkouts you can see. Never offer this kit repo as a target. Restate the selection and the
-   targets in one line before you start. When you run *inside* a devcontainer, say that 6 belongs
-   on the host and that 1–5 are lost on rebuild unless 7's `KIT_COMPONENTS` reinstalls them.
+   Group the question as **sessions and accounts** (1, 2, 4, plus 8 when you are on the docker
+   host), **status bars and editors** (3, 5, 6, 7) and **per project** (9, 10). If 9 or 10 is
+   picked, also ask **which repositories**, listing the checkouts you can see. Never offer this kit
+   repo as a target. Restate the selection and the targets in one line before you start. When you
+   run *inside* a devcontainer, say that 8 belongs on the host and that 1–7 are lost on rebuild
+   unless 9's `KIT_COMPONENTS` reinstalls them.
 1. **Check prerequisites** for the picked components only: `bash`, `git`, `tmux` (≥ 3.2) for
    kmux, `python3` (≥ 3.11 for tasks), `claude` and/or `codex` on a non-interactive `PATH`,
-   `docker` + `devcontainer` CLI for dch and devcontainer. Report any that are missing. Install
+   `curl` + `tar` for nvim, `sudo` (or root) for vim, `docker` + `devcontainer` CLI for dch and
+   devcontainer. Report any that are missing. Install
    them only if the user asked you to.
 2. **kmux** (1): follow [docs/kmux.md](docs/kmux.md) § Install. Install
    `reference/kmux/variant-a/kmux` at `~/bin/kmux` (mode 755) and symlink
@@ -69,23 +73,27 @@ implementations: copy them and adapt where needed, but don't redesign them.
    - 4 only: also add `export XCODEX_STATUS_LINE=0` to the rc files (guarded).
    - 5 only: set `[tui] status_line = [...]` (the list in `xcodex.sh`'s `XCODEX_STATUS_ITEMS`) in
      the default `~/.codex/config.toml`, unless it already sets one. Never in the other profiles.
-   `reference/devcontainer/kit-bootstrap.sh` implements 1–5 unattended exactly this way; it is the
+5. **vim** (6) **and/or nvim** (7): follow [docs/editors.md](docs/editors.md) § Install. Install
+   the editor only; never create, overwrite or "improve" an existing `~/.vimrc`, `~/.vim/` or
+   `~/.config/nvim/`.
+
+   `reference/devcontainer/kit-bootstrap.sh` implements 1–7 unattended exactly this way; it is the
    executable reading of these steps.
-5. **dch** (6): follow [docs/dch.md](docs/dch.md) § Install, on the host only.
-6. **devcontainer** (7, per project): follow [docs/devcontainer.md](docs/devcontainer.md)
+6. **dch** (8): follow [docs/dch.md](docs/dch.md) § Install, on the host only.
+7. **devcontainer** (9, per project): follow [docs/devcontainer.md](docs/devcontainer.md)
    § Install procedure in each named repo. Set `KIT_COMPONENTS` to the home tools picked in step 0,
    build it with `devcontainer up`, and commit `.devcontainer/` with an explicit pathspec.
-7. **tasks** (8, per project): follow [docs/tasks.md](docs/tasks.md) § Install procedure. Install it in
+8. **tasks** (10, per project): follow [docs/tasks.md](docs/tasks.md) § Install procedure. Install it in
    every project repository the user named. Never install it into this kit repo.
    `reference/tasks/install.sh <repo>` vendors `tools/tasks` + `tools/taskctl/`, creates `tasks/`
    and the skills, merges the guard hook, and appends a `## Task workflow` section to the project's
    `AGENTS.md`/`CLAUDE.md`. Then fill `tasks/gate.cmds` with the project's real lint/test commands and
    commit on `main` with the printed pathspec. A repo that already runs its own tracker is refused.
    Report it and leave it alone.
-8. **Verify:** run every item in each picked component's "Verification checklist" and report pass
+9. **Verify:** run every item in each picked component's "Verification checklist" and report pass
    or fail for each. Use the fake-binary tests where the real CLIs need a login. Run the tasks
    lifecycle checks in a throwaway clone, never in the user's checkout.
-9. **Report:** what you installed and where (by menu item), the backup directory, which profiles
+10. **Report:** what you installed and where (by menu item), the backup directory, which profiles
    are logged in (from `xclaude ls` / `xcodex ls`), which repos got a devcontainer and/or `tasks/`
    and what their `gate.cmds` runs, and what the user still has to do (e.g. `xclaude 2` then
    `/login`, `xcodex 2 login`, `exec zsh` to load the functions, logging in inside a new
@@ -96,7 +104,7 @@ implementations: copy them and adapt where needed, but don't redesign them.
 Claude/Codex config usually sits on a named volume (`~/.claude`, sometimes `~/.codex`).
 Extra profile directories (`~/.claude-2`, `~/.codex-2`, …) and the files in `~/bin` and `~/.config` **are not on a volume, so
 a rebuild loses them**. Tell the user. Suggest either adding volumes for them or
-re-running the picked home tools from `postCreateCommand`; the devcontainer template (menu item 7)
+re-running the picked home tools from `postCreateCommand`; the devcontainer template (menu item 9)
 does both: login volumes for profiles 1–2 and `kit-bootstrap.sh` with `KIT_COMPONENTS`. The tasks kit is the exception: it is committed in the
 project, so a rebuild loses only the gitignored `.worktrees/` and leases, and the next `tools/tasks claim`
 resumes or adopts the orphaned tasks.

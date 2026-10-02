@@ -12,7 +12,7 @@ done
 
 git config --global --add safe.directory "$PWD"
 
-# Home tools from the kmux kit (kmux, xclaude, xcodex, status bars): the $HOME layer is new on
+# Home tools from the kmux kit (kmux, xclaude, xcodex, status bars, vim, nvim): the $HOME layer is new on
 # every rebuild, so reinstall them here. KIT_COMPONENTS comes from devcontainer.json.
 if [ -n "${KIT_COMPONENTS// /}" ]; then
   kit="${KIT_DIR:-$HOME/.local/share/kmux-kit}"
@@ -21,7 +21,9 @@ if [ -n "${KIT_COMPONENTS// /}" ]; then
   else
     git -C "$kit" pull -q --ff-only || echo "post-create: kit pull failed; using the existing checkout"
   fi
-  bash "$kit/reference/devcontainer/kit-bootstrap.sh" "$kit"
+  # A failed component must not block the container (dch would never reach a shell): warn loudly.
+  bash "$kit/reference/devcontainer/kit-bootstrap.sh" "$kit" \
+    || echo "post-create: WARNING: kit-bootstrap failed (see above); the container is up without it"
 fi
 
 # --- Project dependencies -------------------------------------------------------------------
